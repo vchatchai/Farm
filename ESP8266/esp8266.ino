@@ -13,15 +13,29 @@ const char *password = "manager1";
 #define mqtt_password "12345"
 
 #define LED_PIN 2
+//D1
+#define IN1 5 
+//D2
+#define IN2 4
+
+//D5
+#define IN3 14
+//D6
+#define IN4 12
+
+
 
 byte mac[6];
 char str_mac[6];
 WiFiClient espClient;
 PubSubClient client(espClient);
+int publicCount = 0;
 
 void setup()
 {
   pinMode(LED_PIN, OUTPUT);
+
+  setupValve();
 
   Serial.begin(115200);
   delay(10);
@@ -66,25 +80,78 @@ void loop()
   if (!client.connected())
   {
 
-    listNetworks();
+//    listNetworks();
     delay(5000);
 
     Serial.println("Attempting MQTT connection...");
 
-    //    array_to_string(str_mac,6, mac);
+
+    
+    Serial.println(WiFi.SSID());
     if (client.connect(str_mac))
     {
       Serial.println("connected");
       client.subscribe("/ESP/LED");
+      
     }
     else
     {
       Serial.print("failed, rc=");
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
+      publicCount = publicCount + 1;
       delay(5000);
+
+
+      if(publicCount > 2){  
+
+  int numSsid = WiFi.scanNetworks();
+
+  // print the network number and name for each network found:
+  for (int thisNet = 0; thisNet < numSsid; thisNet++)
+  {
+    byte encryption = WiFi.encryptionType(thisNet);
+
+    if(encryption == 7 ){
+      continue;
+    }
+
+    Serial.print(thisNet);
+    Serial.print(") ");
+    String ssidString = WiFi.SSID(thisNet);
+    char ssid[ssidString.length() + 1];
+    ssidString.toCharArray(ssid, ssidString.length() + 1);
+    Serial.print(ssid);
+    Serial.print("\tSignal: ");
+    Serial.print(WiFi.RSSI(thisNet));
+    Serial.print(" dBm");
+    Serial.println("\tEncryption: ");
+    
+    
+    Serial.println(encryption,HEX);
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
+
+    WiFi.begin(ssid, password);
+
+    delay(10000);
+    if (WiFi.status() == WL_CONNECTED)
+    {
       return;
     }
+    Serial.print(".");
+
+    //    printEncryptionType(WiFi.encryptionType(thisNet));
+  }
+
+
+        publicCount = 0;
+      }
+      
+      return;
+    }
+
+    
   }
   client.loop();
 }
@@ -144,10 +211,12 @@ void callback(char *topic, byte *payload, unsigned int length)
     if (statusLed.equals("ON"))
     {
       digitalWrite(LED_PIN, LOW);
+      turnONValue();
     }
     else if (statusLed.equals("OFF"))
     {
       digitalWrite(LED_PIN, HIGH);
+      turnOFFValue();
     }
 
     //  digitalWrite(LED_PIN, (msg == "LEDON" ? HIGH : LOW));
@@ -181,6 +250,14 @@ void listNetworks()
   for (int thisNet = 0; thisNet < numSsid; thisNet++)
   {
 
+
+    byte encryption = WiFi.encryptionType(thisNet);
+    if(encryption == 7 ){
+      continue;
+    }
+
+
+
     if (WiFi.status() == WL_CONNECTED)
     {
       return;
@@ -196,7 +273,7 @@ void listNetworks()
     Serial.print(WiFi.RSSI(thisNet));
     Serial.print(" dBm");
     Serial.println("\tEncryption: ");
-
+    Serial.println(encryption,HEX);
     Serial.println();
     Serial.print("Connecting to ");
     Serial.println(ssid);
@@ -209,3 +286,60 @@ void listNetworks()
     //    printEncryptionType(WiFi.encryptionType(thisNet));
   }
 }
+
+void setupValve(){
+  
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+}
+
+void turnONValue() {
+// turn on 
+//digitalWrite(ENA, LOW);  // set speed to 200 out of possible range 0~255
+digitalWrite(IN1, HIGH);
+digitalWrite(IN2, LOW);
+
+delay(50); 
+
+//digitalWrite(IN1, LOW);
+//digitalWrite(IN2, HIGH);
+//
+//delay(5000); // now turn off motors
+
+digitalWrite(IN1, LOW);
+digitalWrite(IN2, LOW);
+}
+
+
+void turnOFFValue() {
+
+// turn on motors
+
+digitalWrite(IN1, LOW);
+digitalWrite(IN2, HIGH);
+delay(50); 
+
+//// accelerate from zero to maximum speed
+//for (int i = 0; i < 256; i++)
+//  {
+//    analogWrite(ENA, i);
+//    delay(50);
+//   }
+//
+//// decelerate from maximum speed to zero
+//for (int i = 255; i >= 0; --i)
+//    {
+//      analogWrite(ENA, i);
+//      delay(50);
+//     }
+
+// now turn off motors
+digitalWrite(IN1, LOW);
+digitalWrite(IN2, LOW);
+}
+
+
+
+
