@@ -6,29 +6,28 @@
 #include <Hash.h>
 
 #include <ESP8266WiFi.h>  //For ESP8266
-#include <PubSubClient.h> //For MQTT
 #include <ESP8266mDNS.h>  //For OTA
 #include <WiFiUdp.h>      //For OTA
 #include <ArduinoOTA.h>   //For OTA
-#include <Bounce2.h>
-#include <DHT.h>
 //WIFI configuration
-#define wifi_ssid ""
-#define wifi_password ""
+#define wifi_ssid "Chatchai"
+#define wifi_password "manager1"
 
 //MQTT configuration
-#define mqtt_server ""
-#define mqtt_user ""
-#define mqtt_password ""
+#define mqtt_server "m11.cloudmqtt.com"
+#define mqtt_port 11621
+#define mqtt_user "kysbvegn"
+#define mqtt_password "Ww2mmbIEU9_e"
 String mqtt_client_id = "ESP8266-"; //This text is concatenated with ChipId to get unique client_id
 //MQTT Topic configuration
-//String mqtt_base_topic = "farm/sensor/";// + mqtt_client_id + "/data";
 
-String humidity_topic = "farm/sensor/humidity/" ;
-String temperature_topic = "farm/sensor/temperature/" ;
-String valve_topic = "farm/valve/";
+String root = "/";
+String farm = root+"farm_home";
+String humidity_topic = farm + "/sensor/humidity/" ;
+String temperature_topic = farm + "/sensor/temperature/" ;
+String valve_topic = farm + "/valve/";
+String pump_topic = farm + "/pump/";
 
-#define DHTTYPE DHT22
 
 
 //PIN BUTTON
@@ -41,72 +40,12 @@ String valve_topic = "farm/valve/";
 #define LED_POWER 2
 
 
-
-//Motor Connections
-//Change this if you wish to use another diagram
-//#define EnA  10
-//#define EnB  5
-#define In1  D5
-#define In2  D6
-#define In3  D7
-#define In4  D8
 int ledState = LOW;
-//MQTT client
-WiFiClient espClient;
-PubSubClient mqtt_client(espClient);
 
 //Necesary to make Arduino Software autodetect OTA device
 WiFiServer TelnetServer(8266);
-DHT dht(DHTPIN, DHTTYPE);
 
-Bounce debouncer = Bounce(); // สร้าง debouncer object
-
-void setup_wifi() {
-  delay(10);
-  Serial.print("Connecting to ");
-  Serial.print(wifi_ssid);
-  WiFi.begin(wifi_ssid, wifi_password);
-  while (WiFi.status() != WL_CONNECTED) {
-
-    //LED_POWER ON
-    digitalWrite(LED_POWER, LOW);
-    delay(500);
-    //LED_POWER OFF
-    digitalWrite(LED_POWER, HIGH);
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("OK");
-  Serial.print("   IP address: ");
-  Serial.println(WiFi.localIP());
-}
-
-void setup() {
-  Serial.begin(115200);
-  Serial.println("\r\nBooting...");
-
-  Serial.println("\r\nSet Value PinMode.");
-  // All motor control pins are outputs
-  //  pinMode(EnA, OUTPUT);
-  //  pinMode(EnB, OUTPUT);
-  pinMode(In1, OUTPUT);
-  pinMode(In2, OUTPUT);
-  pinMode(In3, OUTPUT);
-  pinMode(In4, OUTPUT);
-
-  // initialize digital pin LED as an output.
-  pinMode(LED_POWER, OUTPUT);
-  pinMode(LED_STATUS, OUTPUT);
-
-  dht.begin();
-
-
-  debouncer.attach(BUTTON_PIN, INPUT_PULLUP);
-  debouncer.interval(25); // กำหนดเวลาการเปลี่ยนสถานะให้กับ debouncer object ที่ 25 มิลลิวินาที
-
-  setup_wifi();
-
-
+void OTASetup(){
 
   Serial.print("Configuring OTA device...");
   TelnetServer.begin();   //Necesary to make Arduino Software autodetect OTA device
@@ -131,209 +70,4 @@ void setup() {
   ArduinoOTA.begin();
   Serial.println("OK");
 
-  Serial.println("Configuring MQTT server...");
-  mqtt_client_id = ESP.getChipId();
-  humidity_topic = humidity_topic + ESP.getChipId();
-  temperature_topic = temperature_topic + ESP.getChipId();
-  //  mqtt_base_topic = "/sensor/" + mqtt_client_id + "/data";
-  mqtt_client.setServer(mqtt_server, 11621);
-
-  mqtt_client.setCallback(callback);
-  Serial.printf("   Server IP: %s\r\n", mqtt_server);
-  Serial.printf("   Username:  %s\r\n", mqtt_user);
-  Serial.println("   Cliend Id: " + mqtt_client_id);
-  Serial.println("   MQTT configured!");
-
-  Serial.println("Setup completed! Running app...");
-
-  //Initial completed.
-  //LED_POWER ON
-  digitalWrite(LED_POWER, LOW);
-}
-
-
-void mqtt_reconnect() {
-  // Loop until we're reconnected
-  while (!mqtt_client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Attempt to connect
-    // If you do not want to use a username and password, change next line to
-    // if (client.connect("ESP8266Client")) {
-    if (mqtt_client.connect(mqtt_client_id.c_str(), mqtt_user, mqtt_password)) {
-      Serial.println("connected");
-      String subscribe_path = valve_topic +  ESP.getChipId();
-      // Length (with one extra character for the null terminator)
-      int str_len = subscribe_path.length() + 1;
-
-      // Prepare the character array (the buffer)
-      char char_array[str_len];
-
-      // Copy it over
-      subscribe_path.toCharArray(char_array, str_len);
-
-      Serial.print("subscribe: ");
-      Serial.println(char_array);
-      mqtt_client.subscribe(char_array);
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(mqtt_client.state());
-      Serial.println(" try again in 5 seconds");
-
-      // Wait 5 seconds before retrying
-
-      //LED_POWER ON
-      digitalWrite(LED_POWER, LOW);
-      delay(2500);
-      //LED_POWER OFF
-      digitalWrite(LED_POWER, HIGH);
-      delay(2500);
-
-    }
-  }
-}
-
-
-bool checkBound(float newValue, float prevValue, float maxDiff) {
-  return (true);
-  return newValue < prevValue - maxDiff || newValue > prevValue + maxDiff;
-}
-
-
-// This functions is executed when some device publishes a message to a topic that your ESP8266 is subscribed to
-// Change the function below to add logic to your program, so when a device publishes a message to a topic that
-// your ESP8266 is subscribed you can actually do something
-void callback(String topic, byte* message, unsigned int length) {
-  Serial.print("Message arrived on topic: ");
-  Serial.print(topic);
-  Serial.print(". Message: ");
-  String messageTemp;
-
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)message[i]);
-    messageTemp += (char)message[i];
-  }
-  Serial.println();
-
-  // Feel free to add more if statements to control more GPIOs with MQTT
-
-  // If a message is received on the topic room/lamp, you check if the message is either on or off. Turns the lamp GPIO according to the message
-  if (topic == valve_topic + ESP.getChipId()) {
-    Serial.print("Changing Valve to ");
-    if (messageTemp == "on") {
-      valveOn();
-    } else if (messageTemp == "off") {
-      valveOff();
-    }
-  }
-  Serial.println();
-}
-
-
-void valveOn()
-{
-  // turn on motor A
-  digitalWrite(In1, HIGH);
-  digitalWrite(In2, LOW);
-  // set speed to 150 out 255
-  //  analogWrite(EnA, 200);
-  // turn on motor B
-  digitalWrite(In3, HIGH);
-  digitalWrite(In4, LOW);
-  // set speed to 150 out 255
-  //  analogWrite(EnB, 200);
-  delay(500);
-  // now turn off motors
-  digitalWrite(In1, LOW);
-  digitalWrite(In2, LOW);
-  digitalWrite(In3, LOW);
-  digitalWrite(In4, LOW);
-
-
-  //LED_STATUS ON
-  ledState = 1;
-  digitalWrite(LED_STATUS, !ledState);
-  Serial.print("Valve On");
-}
-
-void valveOff()
-{
-  // turn on motor A
-  digitalWrite(In1, LOW);
-  digitalWrite(In2, HIGH);
-  // set speed to 150 out 255
-  //  analogWrite(EnA, 200);
-  // turn on motor B
-  digitalWrite(In3, LOW);
-  digitalWrite(In4, HIGH);
-  // set speed to 150 out 255
-  //  analogWrite(EnB, 200);
-  delay(500);
-  // now turn off motors
-  digitalWrite(In1, LOW);
-  digitalWrite(In2, LOW);
-  digitalWrite(In3, LOW);
-  digitalWrite(In4, LOW);
-
-  //LED_STATUS ON
-  ledState = 0;
-  digitalWrite(LED_STATUS, !ledState);
-  Serial.print("Off");
-}
-
-void pushButton() {
-  debouncer.update(); // อัปเดตสถานะให้กับ debouncer object
-
-  // กำหนดเงื่อนไขให้โค้ดโปรแกรมในวงเล็บปีกกาทำงานเมื่อสถานะปุ่มกดเปลี่ยนจาก HIGH เป็น LOW โดยเช็คจากฟังก์ชั่น fell()
-  // หากต้องการเช็คสถานะจาก LOW เป็น HIGH ให้แทนที่ฟังก์ชั่น fell() ด้วยฟังก์ชั่น rose()
-  if ( debouncer.fell() ) {
-    ledState = !ledState; // สลับสถานะติด/ดับของ LED
-    mqtt_client.publish((valve_topic).c_str(), String(ledState).c_str(), true);
-  }
-}
-
-
-long now = 0; //in ms
-long lastMsg = 0;
-float temp = 0.0;
-float hum = 0.0;
-float diff = 1.0;
-int min_timeout = 2000; //in ms
-
-void loop() {
-
-  ArduinoOTA.handle();
-
-  if (!mqtt_client.connected()) {
-    mqtt_reconnect();
-  }
-  mqtt_client.loop();
-
-  now = millis();
-  if (now - lastMsg > min_timeout) {
-    lastMsg = now;
-    now = millis();
-    //    float newTemp = temp + 2; //hdc.readTemperature();
-    //    float newHum = hum + 0.5; //hdc.readHumidity();
-
-    float newHum = dht.readHumidity();
-    // Read temperature as Celsius (the default)
-    float newTemp = dht.readTemperature();
-
-    if (checkBound(newTemp, temp, diff)) {
-      temp = newTemp;
-      Serial.print("Sent ");
-      Serial.print(String(temp).c_str());
-      Serial.println(" to " + temperature_topic);
-      mqtt_client.publish((temperature_topic).c_str(), String(temp).c_str(), true);
-    }
-
-    if (checkBound(newHum, hum, diff)) {
-      hum = newHum;
-      Serial.print("Sent ");
-      Serial.print(String(hum).c_str());
-      Serial.println(" to " +  humidity_topic );
-      mqtt_client.publish((humidity_topic).c_str(), String(hum).c_str(), true);
-    }
-  }
-  pushButton();
 }
