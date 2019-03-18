@@ -9,6 +9,14 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
+type Message struct {
+	Time     time.Time
+	Topic    string
+	Type     string
+	DeviceId string
+	Value    string
+}
+
 func Connect(clientId string, uri *url.URL) mqtt.Client {
 	opts := createClientOptions(clientId, uri)
 	client := mqtt.NewClient(opts)
