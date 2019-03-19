@@ -3,6 +3,8 @@ package main
 import (
 	"sync"
 
+	"github.com/vchatchai/Farm/server/src/db"
+
 	"github.com/vchatchai/Farm/server/src/mqttclient"
 	//import the Paho Go MQTT library
 	"log"
@@ -14,7 +16,13 @@ const TOPIC = "#"
 
 var wg sync.WaitGroup
 
+func init() {
+	db.InitDb()
+
+}
+
 func main() {
+
 	uri, err := url.Parse(os.Getenv("CLOUDMQTT_URL"))
 	if err != nil {
 		log.Fatal(err)
