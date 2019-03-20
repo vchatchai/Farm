@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"regexp"
+	"strings"
 	"time"
+
+	"github.com/vchatchai/Farm/server/src/db"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -40,6 +44,8 @@ func createClientOptions(clientId string, uri *url.URL) *mqtt.ClientOptions {
 	return opts
 }
 
+const INSERT = "INSERT INTO MESSAGE(Time,Topic,FarmName,Type,DeviceId,Value) VALUES(?,?,?,?,?,?) "
+
 func Listen(uri *url.URL, topic string) {
 	client := Connect("sub", uri)
 	client.Subscribe(topic, 0, func(client mqtt.Client, msg mqtt.Message) {
@@ -49,37 +55,51 @@ func Listen(uri *url.URL, topic string) {
 			topic,
 			getFarmName(topic),
 			getType(topic),
-			getDeviceId(topic),
+			getDeviceID(topic),
 			string(msg.Payload()),
 		}
-
 		fmt.Printf("* [%s] %s %v\n", msg.Topic(), string(msg.Payload()), message)
-		/*
 
+		tx, err := db.DB.Begin()
+		if err != nil {
+			log.Fatal(err)
+		}
 
-			tx, err := db.DB.Begin()
-			if err != nil {
-				log.Fatal(err)
-			}
-			_, err = tx.Exec("")
-			if err != nil {
-				tx.Rollback()
-			} else {
-				tx.Commit()
-			}
-		*/
+		stmt, err := tx.Prepare(INSERT)
+		if err != nil {
+			tx.Rollback()
+		}
+		defer stmt.Close()
+		_, err = stmt.Exec(message.Time, message.Topic, message.FarmName, message.Type, message.DeviceId, message.Value)
+
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+
 	})
 }
 
-func getDeviceId(topic string) string {
+var farmNameRe = regexp.MustCompile(`^/\w+`)
+var deviceIDRe = regexp.MustCompile(`^/\w+`)
+var types = []string{"temperature", "valve", "pump", "humidity"}
 
-	return "DeviceId"
+func getDeviceID(topic string) string {
+	result := deviceIDRe.FindString(topic)
+	return result
 }
 
 func getType(topic string) string {
-	return "type"
+	for _, t := range types {
+		if strings.Contains(topic, t) {
+			return t
+		}
+	}
+	return ""
 }
 
 func getFarmName(topic string) string {
-	return "name"
+	result := farmNameRe.FindString(topic)
+	return result
 }
