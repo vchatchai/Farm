@@ -13,15 +13,6 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-type Message struct {
-	Time     time.Time
-	Topic    string
-	FarmName string
-	Type     string
-	DeviceId string
-	Value    string
-}
-
 func Connect(clientId string, uri *url.URL) mqtt.Client {
 	opts := createClientOptions(clientId, uri)
 	client := mqtt.NewClient(opts)
@@ -44,13 +35,11 @@ func createClientOptions(clientId string, uri *url.URL) *mqtt.ClientOptions {
 	return opts
 }
 
-const INSERT = "INSERT INTO MESSAGE(Time,Topic,FarmName,Type,DeviceId,Value) VALUES(?,?,?,?,?,?) "
-
 func Listen(uri *url.URL, topic string) {
 	client := Connect("sub", uri)
 	client.Subscribe(topic, 0, func(client mqtt.Client, msg mqtt.Message) {
 		topic := msg.Topic()
-		message := Message{
+		message := db.Message{
 			time.Now(),
 			topic,
 			getFarmName(topic),
@@ -59,25 +48,7 @@ func Listen(uri *url.URL, topic string) {
 			string(msg.Payload()),
 		}
 		fmt.Printf("* [%s] %s %v\n", msg.Topic(), string(msg.Payload()), message)
-
-		tx, err := db.DB.Begin()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		stmt, err := tx.Prepare(INSERT)
-		if err != nil {
-			tx.Rollback()
-		}
-		defer stmt.Close()
-		_, err = stmt.Exec(message.Time, message.Topic, message.FarmName, message.Type, message.DeviceId, message.Value)
-
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-
+		db.Save(message)
 	})
 }
 
