@@ -13,8 +13,6 @@ import (
 
 const driver = "postgres"
 
-const INSERT = "INSERT INTO MESSAGE(Time,Topic,FarmName,Type,DeviceId,Value) VALUES(?,?,?,?,?,?) "
-
 const (
 	dbhost = "DBHOST"
 	dbport = "DBPORT"
@@ -87,6 +85,7 @@ func dbConfig() map[string]string {
 	conf[dbuser] = user
 	conf[dbpass] = password
 	conf[dbname] = name
+	conf[dbuser] = "postgres"
 	return conf
 }
 
@@ -106,12 +105,14 @@ func createTable(name string) {
 	DB.Exec(TABLE, name)
 }
 
-var IsTableExist = `SELECT EXISTS (
-	SELECT 1
-	FROM   information_schema.tables 
-	WHERE  table_schema = $1
-	AND    table_name = $2
-	);`
+// var IsTableExist = `SELECT EXISTS (
+// 	SELECT 1
+// 	FROM   information_schema.tables
+// 	WHERE  table_schema = $1
+// 	AND    table_name = $2
+// 	);`
+
+var IsTableExist = `SELECT * FROM information_schema.tables`
 
 func ExistTable(schema, table string) bool {
 	stmt, err := DB.Prepare(IsTableExist)
@@ -120,14 +121,19 @@ func ExistTable(schema, table string) bool {
 	}
 	defer stmt.Close()
 
-	rows, err := stmt.Query(schema, table)
+	// rows, err := stmt.Query(schema, table)
+
+	rows, err := stmt.Query()
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
 	exist := false
 	for rows.Next() {
-		err := rows.Scan(&exist)
+		var dest [12]interface{}
+		err := rows.Scan(&dest[0], &dest[1], &dest[2], &dest[3], &dest[4], &dest[5], &dest[6], &dest[7], &dest[8], &dest[9], &dest[10], &dest[11])
+		// err := rows.Scan(&exist)
+		fmt.Printf("value: %v\n", dest)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -135,21 +141,27 @@ func ExistTable(schema, table string) bool {
 	return exist
 }
 
-func Save(message Message) {
+const INSERT = `INSERT INTO message (time,topic,farm_name,type,device_id,value) VALUES($1,$2,$3,$4,$5,$6) `
+
+func Save(msg Message) {
 
 	tx, err := DB.Begin()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	stmt, err := tx.Prepare(INSERT)
+	stmt, err := tx.Prepare(string(INSERT))
 	if err != nil {
+		log.Fatal(err)
 		tx.Rollback()
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(message.Time, message.Topic, message.FarmName, message.Type, message.DeviceId, message.Value)
+	fmt.Printf("Message Insert: %s", INSERT)
+	result, err := stmt.Exec(msg.Time, msg.Topic, msg.FarmName, msg.Type, msg.DeviceId, msg.Value)
+	fmt.Println(result)
 
 	if err != nil {
+		fmt.Printf(err.Error())
 		tx.Rollback()
 	} else {
 		tx.Commit()

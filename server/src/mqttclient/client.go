@@ -53,7 +53,7 @@ func Listen(uri *url.URL, topic string) {
 }
 
 var farmNameRe = regexp.MustCompile(`^/\w+`)
-var deviceIDRe = regexp.MustCompile(`^/\w+`)
+var deviceIDRe = regexp.MustCompile(`\d+`)
 var types = []string{"temperature", "valve", "pump", "humidity"}
 
 func getDeviceID(topic string) string {
